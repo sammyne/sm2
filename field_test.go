@@ -1034,28 +1034,28 @@ func TestSquare(t *testing.T) {
 	}{
 		// sm2 prime (aka 0)
 		{"0", "0"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f", "0"},
-		{"0", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"},
+		{"fffffffeffffffffffffffffffffffffffffffff00000000ffffffffffffffff", "0"},
+		{"0", "fffffffeffffffffffffffffffffffffffffffff00000000ffffffffffffffff"},
 		// sm2 prime-1
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e", "1"},
+		{"fffffffeffffffffffffffffffffffffffffffff00000000fffffffffffffffe", "1"},
 		// sm2 prime-2
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2d", "4"},
+		{"fffffffeffffffffffffffffffffffffffffffff00000000fffffffffffffffd", "4"},
 		// Random sampling
 		{
 			"b0ba920360ea8436a216128047aab9766d8faf468895eb5090fc8241ec758896",
-			"133896b0b69fda8ce9f648b9a3af38f345290c9eea3cbd35bafcadf7c34653d3",
+			"eafcc48295f2810006ad563047bbbc49d88e184d7a1f0e5bdec29653a2f7f71c",
 		},
 		{
 			"c55d0d730b1d0285a1599995938b042a756e6e8857d390165ffab480af61cbd5",
-			"cd81758b3f5877cbe7e5b0a10cebfa73bcbf0957ca6453e63ee8954ab7780bee",
+			"b9335391fc90db7d06e758aef73a46b6a7a660194c5c651ab9e6b63f409984b7",
 		},
 		{
 			"e89c1f9a70d93651a1ba4bca5b78658f00de65a66014a25544d3365b0ab82324",
-			"39ffc7a43e5dbef78fd5d0354fb82c6d34f5a08735e34df29da14665b43aa1f",
+			"b22fbf39a4b852b6df3a656b534b67c77365d88a826d4466edb6eda3e1b862c6",
 		},
 		{
 			"7dc26186079d22bcbe1614aa20ae627e62d72f9be7ad1e99cac0feb438956f05",
-			"bf86bcfc4edb3d81f916853adfda80c07c57745b008b60f560b1912f95bce8ae",
+			"e4dbc99066306e0526f1878e386fc8e2dda743e3b253fc420de8bc45fe16d6f2",
 		},
 	}
 

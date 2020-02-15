@@ -706,8 +706,7 @@ func (f *fieldVal) Mul2(val *fieldVal, val2 *fieldVal) *fieldVal {
 	// that nothing will be changed when the magnitude is zero, so we could
 	// skip this in that case, however always running regardless allows it
 	// to run in constant time.  The final result will be in the range
-	// ~~0 <= result <= prime + (2^64 - c)~~, so it is guaranteed to have a
-	// magnitude of 1, but it is denormalized.
+	// 0 <= result <= 2^256 + m*c < 2 * prime, but it is denormalized.
 	f.n[0] = uint32(t0 + m)
 	f.n[1] = uint32(t1)
 	f.n[2] = uint32(t2 + m*fieldCWord2) // m*fieldCWord2 < 2^5 * 2^26 = 2^31
@@ -983,6 +982,90 @@ func (f *fieldVal) PutBytes(b *[32]byte) {
 	b[0] = byte((f.n[9] >> 14) & eightBitsMask)
 }
 
+// Set sets the field value equal to the passed value.
+//
+// The field value is returned to support chaining.  This enables syntax like:
+// f := new(fieldVal).Set(f2).Add(1) so that f = f2 + 1 where f2 is not
+// modified.
+func (f *fieldVal) Set(val *fieldVal) *fieldVal {
+	*f = *val
+	return f
+}
+
+// SetBytes packs the passed 32-byte big-endian value into the internal field
+// value representation.
+//
+// The field value is returned to support chaining.  This enables syntax like:
+// f := new(fieldVal).SetBytes(byteArray).Mul(f2) so that f = ba * f2.
+func (f *fieldVal) SetBytes(b *[32]byte) *fieldVal {
+	// Pack the 256 total bits across the 10 uint32 words with a max of
+	// 26-bits per word.  This could be done with a couple of for loops,
+	// but this unrolled version is significantly faster.  Benchmarks show
+	// this is about 34 times faster than the variant which uses loops.
+	f.n[0] = uint32(b[31]) | uint32(b[30])<<8 | uint32(b[29])<<16 |
+		(uint32(b[28])&twoBitsMask)<<24
+	f.n[1] = uint32(b[28])>>2 | uint32(b[27])<<6 | uint32(b[26])<<14 |
+		(uint32(b[25])&fourBitsMask)<<22
+	f.n[2] = uint32(b[25])>>4 | uint32(b[24])<<4 | uint32(b[23])<<12 |
+		(uint32(b[22])&sixBitsMask)<<20
+	f.n[3] = uint32(b[22])>>6 | uint32(b[21])<<2 | uint32(b[20])<<10 |
+		uint32(b[19])<<18
+	f.n[4] = uint32(b[18]) | uint32(b[17])<<8 | uint32(b[16])<<16 |
+		(uint32(b[15])&twoBitsMask)<<24
+	f.n[5] = uint32(b[15])>>2 | uint32(b[14])<<6 | uint32(b[13])<<14 |
+		(uint32(b[12])&fourBitsMask)<<22
+	f.n[6] = uint32(b[12])>>4 | uint32(b[11])<<4 | uint32(b[10])<<12 |
+		(uint32(b[9])&sixBitsMask)<<20
+	f.n[7] = uint32(b[9])>>6 | uint32(b[8])<<2 | uint32(b[7])<<10 |
+		uint32(b[6])<<18
+	f.n[8] = uint32(b[5]) | uint32(b[4])<<8 | uint32(b[3])<<16 |
+		(uint32(b[2])&twoBitsMask)<<24
+	f.n[9] = uint32(b[2])>>2 | uint32(b[1])<<6 | uint32(b[0])<<14
+	return f
+}
+
+// SetByteSlice packs the passed big-endian value into the internal field value
+// representation.  Only the first 32-bytes are used.  As a result, it is up to
+// the caller to ensure numbers of the appropriate size are used or the value
+// will be truncated.
+//
+// The field value is returned to support chaining.  This enables syntax like:
+// f := new(fieldVal).SetByteSlice(byteSlice)
+func (f *fieldVal) SetByteSlice(b []byte) *fieldVal {
+	var b32 [32]byte
+	for i := 0; i < len(b); i++ {
+		if i < 32 {
+			b32[i+(32-len(b))] = b[i]
+		}
+	}
+	return f.SetBytes(&b32)
+}
+
+// SetHex decodes the passed big-endian hex string into the internal field value
+// representation.  Only the first 32-bytes are used.
+//
+// The field value is returned to support chaining.  This enables syntax like:
+// f := new(fieldVal).SetHex("0abc").Add(1) so that f = 0x0abc + 1
+func (f *fieldVal) SetHex(hexString string) *fieldVal {
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
+	bytes, _ := hex.DecodeString(hexString)
+	return f.SetByteSlice(bytes)
+}
+
+// SetInt sets the field value to the passed integer.  This is a convenience
+// function since it is fairly common to perform some arithemetic with small
+// native integers.
+//
+// The field value is returned to support chaining.  This enables syntax such
+// as f := new(fieldVal).SetInt(2).Mul(f2) so that f = 2 * f2.
+func (f *fieldVal) SetInt(ui uint) *fieldVal {
+	f.Zero()
+	f.n[0] = uint32(ui)
+	return f
+}
+
 // Square squares the field value.  The existing field value is modified.  Note
 // that this function can overflow if multiplying any of the individual words
 // exceeds a max uint32.  In practice, this means the magnitude of the field
@@ -1143,48 +1226,103 @@ func (f *fieldVal) SquareVal(val *fieldVal) *fieldVal {
 	// when the modulus is of the special form m = b^t - c, highly efficient
 	// reduction can be achieved per the provided algorithm.
 	//
-	// The sm2 prime is equivalent to 2^256 - 4294968273, so it fits
-	// this criteria.
+	// let cc = 0x0000000100000000000000000000000000000000ffffffff0000000000000001
+	// The sm2 prime P = 2^256 - cc, so it fits this criteria.
 	//
-	// 4294968273 in field representation (base 2^26) is:
-	// n[0] = 977
-	// n[1] = 64
-	// That is to say (2^26 * 64) + 977 = 4294968273
+	// cc in field representation (base 2^26) is:
+	// n[0] = 1
+	// n[1] = 0
+	// n[2] = 0x3fff000
+	// n[3] = 0x3ffff
+	// n[4] = 0
+	// n[5] = 0
+	// n[6] = 0
+	// n[7] = 0
+	// n[8] = 0x10000
+	// n[9] = 0
+	// That is to say
+	// cc = 2^(26*8) * 0x10000 		+
+	//		2^(26*3) * 0x3ffff 		+
+	//		2^(26*2) * 0x3fff000 	+
+	//		2^(26*0) * 1
 	//
 	// Since each word is in base 26, the upper terms (t10 and up) start
 	// at 260 bits (versus the final desired range of 256 bits), so the
 	// field representation of 'c' from above needs to be adjusted for the
-	// extra 4 bits by multiplying it by 2^4 = 16.  4294968273 * 16 =
-	// 68719492368.  Thus, the adjusted field representation of 'c' is:
-	// n[0] = 977 * 16 = 15632
-	// n[1] = 64 * 16 = 1024
-	// That is to say (2^26 * 1024) + 15632 = 68719492368
+	// extra 4 bits by multiplying it by 2^4 = 16.
 	//
-	// To reduce the final term, t19, the entire 'c' value is needed instead
-	// of only n[0] because there are no more terms left to handle n[1].
-	// This means there might be some magnitude left in the upper bits that
-	// is handled below.
-	m = t0 + t10*15632
-	t0 = m & fieldBaseMask
-	m = (m >> fieldBase) + t1 + t10*1024 + t11*15632
-	t1 = m & fieldBaseMask
-	m = (m >> fieldBase) + t2 + t11*1024 + t12*15632
-	t2 = m & fieldBaseMask
-	m = (m >> fieldBase) + t3 + t12*1024 + t13*15632
-	t3 = m & fieldBaseMask
-	m = (m >> fieldBase) + t4 + t13*1024 + t14*15632
-	t4 = m & fieldBaseMask
-	m = (m >> fieldBase) + t5 + t14*1024 + t15*15632
-	t5 = m & fieldBaseMask
-	m = (m >> fieldBase) + t6 + t15*1024 + t16*15632
-	t6 = m & fieldBaseMask
-	m = (m >> fieldBase) + t7 + t16*1024 + t17*15632
-	t7 = m & fieldBaseMask
-	m = (m >> fieldBase) + t8 + t17*1024 + t18*15632
-	t8 = m & fieldBaseMask
-	m = (m >> fieldBase) + t9 + t18*1024 + t19*68719492368
-	t9 = m & fieldMSBMask
-	m = m >> fieldMSBBits
+	// Suppose B=2^26, and let
+	//	V=(v_i,v_(i-1),...,v_0)=v_i*B^i + v_(i-1)*B^(i-1) + ... + v_0
+	// denote a base-B integer, and
+	// 	T=(t19,t18,...,t0),
+	//  q0=(t19,t18,...,t10).
+	// Calculate
+	//	 T - (q0<<4) * P
+	// = T - q0 * ((2^256 - cc) << 4)
+	// = T - q0 * B^10 + q0 * (cc << 4)
+	// = (t9,t8,...,t0) + (q0 * cc)<<4
+	// = (t9,t8,...,t0) + (q0 * (n[0] + n[2]*B^2 + n[3]*B^3 + n[8]*B^8))<<4
+	// Further expansion would give calculation as follows.
+	// @TODO: unroll the loop
+	const bits = 4
+	// output for each round
+	// 0: t19<2^38
+	// 1: t19<2^7
+	// 2: t19=0, t18<2^4
+	// 3: t19=t18=t17=0, t16<2^25
+	// 4: t19=...=t16=0, t15<2^20
+	// 5: t19=...=t15=0, t14<2^15
+	// 6: t19=...=t14=0, t13<2^10
+	// 7: t19=...=t13=0, t12<2^5
+	// 8: t19=...=t11=0, t10<2^26
+	// 9: t19=...=t11=0, t10<=1
+	for i := 1; i <= 9; i++ {
+		// each d is at most 56 bits
+		d := t0 + (t10*fieldCWord0)<<bits
+		t0 = d & fieldBaseMask
+		d = d>>fieldBase + t1 + (t11*fieldCWord0)<<bits
+		t1 = d & fieldBaseMask
+		d = d>>fieldBase + t2 + (t12*fieldCWord0+t10*fieldCWord2)<<bits
+		t2 = d & fieldBaseMask
+		d = d>>fieldBase + t3 + (t13*fieldCWord0+t11*fieldCWord2+t10*fieldCWord3)<<bits
+		t3 = d & fieldBaseMask
+		d = d>>fieldBase + t4 + (t14*fieldCWord0+t12*fieldCWord2+t11*fieldCWord3)<<bits
+		t4 = d & fieldBaseMask
+		d = d>>fieldBase + t5 + (t15*fieldCWord0+t13*fieldCWord2+t12*fieldCWord3)<<bits
+		t5 = d & fieldBaseMask
+		d = d>>fieldBase + t6 + (t16*fieldCWord0+t14*fieldCWord2+t13*fieldCWord3)<<bits
+		t6 = d & fieldBaseMask
+		d = d>>fieldBase + t7 + (t17*fieldCWord0+t15*fieldCWord2+t14*fieldCWord3)<<bits
+		t7 = d & fieldBaseMask
+		d = d>>fieldBase + t8 +
+			(t18*fieldCWord0+t16*fieldCWord2+t15*fieldCWord3+t10*fieldCWord8)<<bits
+		t8 = d & fieldBaseMask
+		d = d>>fieldBase + t9 +
+			(t19*fieldCWord0+t17*fieldCWord2+t16*fieldCWord3+t11*fieldCWord8)<<bits
+		t9 = d & fieldBaseMask
+		d = d>>fieldBase + (t18*fieldCWord2+t17*fieldCWord3+t12*fieldCWord8)<<bits
+		t10 = d & fieldBaseMask
+		d = d>>fieldBase + (t19*fieldCWord2+t18*fieldCWord3+t13*fieldCWord8)<<bits
+		t11 = d & fieldBaseMask
+		d = d>>fieldBase + (t19*fieldCWord3+t14*fieldCWord8)<<bits
+		t12 = d & fieldBaseMask
+		d = d>>fieldBase + (t15*fieldCWord8)<<bits
+		t13 = d & fieldBaseMask
+		d = d>>fieldBase + (t16*fieldCWord8)<<bits
+		t14 = d & fieldBaseMask
+		d = d>>fieldBase + (t17*fieldCWord8)<<bits
+		t15 = d & fieldBaseMask
+		d = d>>fieldBase + (t18*fieldCWord8)<<bits
+		t16 = d & fieldBaseMask
+		d = d>>fieldBase + (t19*fieldCWord8)<<bits
+		t17 = d & fieldBaseMask
+		d = d >> fieldBase
+		t18 = d & fieldBaseMask
+		d = d >> fieldBase
+		t19 = d & fieldBaseMask
+	}
+	m = (t9 >> fieldMSBBits) | (t10 << bits) // m<2^5
+	t9 &= fieldMSBMask
 
 	// At this point, if the magnitude is greater than 0, the overall value
 	// is greater than the max possible 256-bit value.  In particular, it is
@@ -1198,105 +1336,18 @@ func (f *fieldVal) SquareVal(val *fieldVal) *fieldVal {
 	// that nothing will be changed when the magnitude is zero, so we could
 	// skip this in that case, however always running regardless allows it
 	// to run in constant time.  The final result will be in the range
-	// 0 <= result <= prime + (2^64 - c), so it is guaranteed to have a
-	// magnitude of 1, but it is denormalized.
-	n := t0 + m*977
-	f.n[0] = uint32(n & fieldBaseMask)
-	n = (n >> fieldBase) + t1 + m*64
-	f.n[1] = uint32(n & fieldBaseMask)
-	f.n[2] = uint32((n >> fieldBase) + t2)
-	f.n[3] = uint32(t3)
+	// 0 <= result <= 2^256 + m*c < 2 * prime, but it is denormalized.
+	f.n[0] = uint32(t0 + m)
+	f.n[1] = uint32(t1)
+	f.n[2] = uint32(t2 + m*fieldCWord2) // m*fieldCWord2 < 2^5 * 2^26 = 2^31
+	f.n[3] = uint32(t3 + m*fieldCWord3) // m*fieldCWord3 < 2^5 * 2^18 = 2^23
 	f.n[4] = uint32(t4)
 	f.n[5] = uint32(t5)
 	f.n[6] = uint32(t6)
 	f.n[7] = uint32(t7)
-	f.n[8] = uint32(t8)
+	f.n[8] = uint32(t8 + m<<16) // m*fieldCWord8 = m<<16, m*fieldCWord8 < 2^5 * 2^16 = 2^21
 	f.n[9] = uint32(t9)
 
-	return f
-}
-
-// Set sets the field value equal to the passed value.
-//
-// The field value is returned to support chaining.  This enables syntax like:
-// f := new(fieldVal).Set(f2).Add(1) so that f = f2 + 1 where f2 is not
-// modified.
-func (f *fieldVal) Set(val *fieldVal) *fieldVal {
-	*f = *val
-	return f
-}
-
-// SetBytes packs the passed 32-byte big-endian value into the internal field
-// value representation.
-//
-// The field value is returned to support chaining.  This enables syntax like:
-// f := new(fieldVal).SetBytes(byteArray).Mul(f2) so that f = ba * f2.
-func (f *fieldVal) SetBytes(b *[32]byte) *fieldVal {
-	// Pack the 256 total bits across the 10 uint32 words with a max of
-	// 26-bits per word.  This could be done with a couple of for loops,
-	// but this unrolled version is significantly faster.  Benchmarks show
-	// this is about 34 times faster than the variant which uses loops.
-	f.n[0] = uint32(b[31]) | uint32(b[30])<<8 | uint32(b[29])<<16 |
-		(uint32(b[28])&twoBitsMask)<<24
-	f.n[1] = uint32(b[28])>>2 | uint32(b[27])<<6 | uint32(b[26])<<14 |
-		(uint32(b[25])&fourBitsMask)<<22
-	f.n[2] = uint32(b[25])>>4 | uint32(b[24])<<4 | uint32(b[23])<<12 |
-		(uint32(b[22])&sixBitsMask)<<20
-	f.n[3] = uint32(b[22])>>6 | uint32(b[21])<<2 | uint32(b[20])<<10 |
-		uint32(b[19])<<18
-	f.n[4] = uint32(b[18]) | uint32(b[17])<<8 | uint32(b[16])<<16 |
-		(uint32(b[15])&twoBitsMask)<<24
-	f.n[5] = uint32(b[15])>>2 | uint32(b[14])<<6 | uint32(b[13])<<14 |
-		(uint32(b[12])&fourBitsMask)<<22
-	f.n[6] = uint32(b[12])>>4 | uint32(b[11])<<4 | uint32(b[10])<<12 |
-		(uint32(b[9])&sixBitsMask)<<20
-	f.n[7] = uint32(b[9])>>6 | uint32(b[8])<<2 | uint32(b[7])<<10 |
-		uint32(b[6])<<18
-	f.n[8] = uint32(b[5]) | uint32(b[4])<<8 | uint32(b[3])<<16 |
-		(uint32(b[2])&twoBitsMask)<<24
-	f.n[9] = uint32(b[2])>>2 | uint32(b[1])<<6 | uint32(b[0])<<14
-	return f
-}
-
-// SetByteSlice packs the passed big-endian value into the internal field value
-// representation.  Only the first 32-bytes are used.  As a result, it is up to
-// the caller to ensure numbers of the appropriate size are used or the value
-// will be truncated.
-//
-// The field value is returned to support chaining.  This enables syntax like:
-// f := new(fieldVal).SetByteSlice(byteSlice)
-func (f *fieldVal) SetByteSlice(b []byte) *fieldVal {
-	var b32 [32]byte
-	for i := 0; i < len(b); i++ {
-		if i < 32 {
-			b32[i+(32-len(b))] = b[i]
-		}
-	}
-	return f.SetBytes(&b32)
-}
-
-// SetHex decodes the passed big-endian hex string into the internal field value
-// representation.  Only the first 32-bytes are used.
-//
-// The field value is returned to support chaining.  This enables syntax like:
-// f := new(fieldVal).SetHex("0abc").Add(1) so that f = 0x0abc + 1
-func (f *fieldVal) SetHex(hexString string) *fieldVal {
-	if len(hexString)%2 != 0 {
-		hexString = "0" + hexString
-	}
-	bytes, _ := hex.DecodeString(hexString)
-	return f.SetByteSlice(bytes)
-}
-
-// SetInt sets the field value to the passed integer.  This is a convenience
-// function since it is fairly common to perform some arithemetic with small
-// native integers.
-//
-// The field value is returned to support chaining.  This enables syntax such
-// as f := new(fieldVal).SetInt(2).Mul(f2) so that f = 2 * f2.
-func (f *fieldVal) SetInt(ui uint) *fieldVal {
-	f.Zero()
-	f.n[0] = uint32(ui)
 	return f
 }
 
