@@ -246,97 +246,84 @@ func (f *fieldVal) Inverse() *fieldVal {
 	// multiplications needed (since they are more costly than squarings).
 	// Intermediate results are saved and reused as well.
 	//
-	// The sm2 prime - 2 is 2^256 - 4294968275.
+	// The sm2 prime - 2 is 2^256 - 2^224 + (2^96 - 2^64) - 2^1
 	//
-	// This has a cost of 258 field squarings and 33 field multiplications.
-	var a2, a3, a4, a10, a11, a21, a42, a45, a63, a1019, a1023 fieldVal
-	a2.SquareVal(f)
-	a3.Mul2(&a2, f)
-	a4.SquareVal(&a2)
-	a10.SquareVal(&a4).Mul(&a2)
-	a11.Mul2(&a10, f)
-	a21.Mul2(&a10, &a11)
-	a42.SquareVal(&a21)
-	a45.Mul2(&a42, &a3)
-	a63.Mul2(&a42, &a21)
-	a1019.SquareVal(&a63).Square().Square().Square().Mul(&a11)
-	a1023.Mul2(&a1019, &a4)
-	f.Set(&a63)                                    // f = a^(2^6 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^11 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^16 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^16 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^21 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^26 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^26 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^31 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^36 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^36 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^41 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^46 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^46 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^51 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^56 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^56 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^61 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^66 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^66 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^71 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^76 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^76 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^81 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^86 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^86 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^91 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^96 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^96 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^101 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^106 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^106 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^111 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^116 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^116 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^121 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^126 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^126 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^131 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^136 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^136 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^141 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^146 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^146 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^151 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^156 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^156 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^161 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^166 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^166 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^171 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^176 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^176 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^181 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^186 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^186 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^191 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^196 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^196 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^201 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^206 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^206 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^211 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^216 - 1024)
-	f.Mul(&a1023)                                  // f = a^(2^216 - 1)
-	f.Square().Square().Square().Square().Square() // f = a^(2^221 - 32)
-	f.Square().Square().Square().Square().Square() // f = a^(2^226 - 1024)
-	f.Mul(&a1019)                                  // f = a^(2^226 - 5)
-	f.Square().Square().Square().Square().Square() // f = a^(2^231 - 160)
-	f.Square().Square().Square().Square().Square() // f = a^(2^236 - 5120)
-	f.Mul(&a1023)                                  // f = a^(2^236 - 4097)
-	f.Square().Square().Square().Square().Square() // f = a^(2^241 - 131104)
-	f.Square().Square().Square().Square().Square() // f = a^(2^246 - 4195328)
-	f.Mul(&a1023)                                  // f = a^(2^246 - 4194305)
-	f.Square().Square().Square().Square().Square() // f = a^(2^251 - 134217760)
-	f.Square().Square().Square().Square().Square() // f = a^(2^256 - 4294968320)
-	return f.Mul(&a45)                             // f = a^(2^256 - 4294968275) = a^(p-2)
+	// The binary representation of (p - 2) has 4 blocks of 1s, with lengths in
+	//  { 1, 31, 62, 128 }. Use an addition chain to calculate 2^n - 1 for each block:
+	//  [1], 2, 3, 4, 7, 8, 14, 16, 17, [31], 32, [62], 64, [128]
+	//
+	// reference: https://github.com/bitcoin-core/secp256k1/blob/856a01d6ad60c70fd92bdd44fa8584493b87594d/src/field_impl.h#L139
+
+	// xi=f^(2^i-1)
+	var x1, x2, x3, x4, x7, x8, x14, x16, x17, x31, x32, x62, x64, x128 fieldVal
+
+	x1 = *f
+	x2.SquareVal(&x1).Mul(&x1)
+	x3.SquareVal(&x2).Mul(&x1)
+	x4.SquareVal(&x3).Mul(&x1)
+	x7.SquareVal(&x4).Square().Square().Mul(&x3)
+	x8.SquareVal(&x7).Mul(&x1)
+
+	x14.SquareVal(&x7).Square().Square().Square()
+	x14.Square().Square().Square()
+	x14.Mul(&x7)
+
+	x16.SquareVal(&x8).Square().Square().Square()
+	x16.Square().Square().Square().Square()
+	x16.Mul(&x8)
+
+	x17.SquareVal(&x16).Mul(&x1)
+
+	x31 = x17
+	for i := 0; i < 14; i++ {
+		x31.Square()
+	}
+	x31.Mul(&x14)
+
+	x32.SquareVal(&x31).Mul(&x1)
+
+	x62 = x31
+	for i := 0; i < 31; i++ {
+		x62.Square()
+	}
+	x62.Mul(&x31)
+
+	x64.SquareVal(&x62).Square().Mul(&x2)
+
+	x128 = x64
+	for i := 0; i < 64; i++ {
+		x128.Square()
+	}
+	x128.Mul(&x64)
+
+	// The final result is then assembled using a sliding window over the blocks.
+	// From the most significant to the least ones,
+	// 1st 1s block of 31 bits, with 225 bits to its right
+	// 2nd 1s block of 128 bits, with 96 bits to its right
+	// 3rd 1s block of 62 bits, with 2 bits to its right
+	// 4th 1s block of 1 bit, with 0 bits to its right
+
+	// put in the 1st 1s block, i.e., 2^31-1
+	*f = x31
+	// left shift the exponent 225-96 bits
+	for i := 0; i < 129; i++ {
+		f.Square()
+	}
+
+	// put in the 2nd 1s block
+	f.Mul(&x128)
+	// left shift the exponent 96-2 bits
+	for i := 0; i < 94; i++ {
+		f.Square()
+	}
+
+	// put in the 3rd 1s block
+	f.Mul(&x62)
+	// left shift the exponent 2-0 bits
+	f.Square().Square()
+
+	// put in the 4th 1s block
+	return f.Mul(&x1)
 }
 
 // IsOdd returns whether or not the field value is an odd number.

@@ -1081,34 +1081,34 @@ func TestInverse(t *testing.T) {
 	}{
 		// sm2 prime (aka 0)
 		{"0", "0"},
-		{"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f", "0"},
-		{"0", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"},
-		// sm2 prime-1
+		{"fffffffeffffffffffffffffffffffffffffffff00000000ffffffffffffffff", "0"},
+		{"0", "fffffffeffffffffffffffffffffffffffffffff00000000ffffffffffffffff"},
+		// sm2 prime-1, (p-1)*(p-1)=p^2-2*p+1=1 (mod p)
 		{
-			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
-			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
+			"fffffffeffffffffffffffffffffffffffffffff00000000fffffffffffffffe",
+			"fffffffeffffffffffffffffffffffffffffffff00000000fffffffffffffffe",
 		},
 		// sm2 prime-2
 		{
-			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2d",
-			"7fffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffe17",
+			"fffffffeffffffffffffffffffffffffffffffff00000000fffffffffffffffd",
+			"7fffffff7fffffffffffffffffffffffffffffff800000007fffffffffffffff",
 		},
 		// Random sampling
 		{
 			"16fb970147a9acc73654d4be233cc48b875ce20a2122d24f073d29bd28805aca",
-			"987aeb257b063df0c6d1334051c47092b6d8766c4bf10c463786d93f5bc54354",
+			"884fe8569a93a41d4627bc92e982945148e9af1f38c6ac7d2066bb63d9526e63",
 		},
 		{
 			"69d1323ce9f1f7b3bd3c7320b0d6311408e30281e273e39a0d8c7ee1c8257919",
-			"49340981fa9b8d3dad72de470b34f547ed9179c3953797d0943af67806f4bb6",
+			"42fc50db6336b98b26e8c5d2720cf1499572cd4a4ea51136755adfb5088d060c",
 		},
 		{
 			"e0debf988ae098ecda07d0b57713e97c6d213db19753e8c95aa12a2fc1cc5272",
-			"64f58077b68af5b656b413ea366863f7b2819f8d27375d9c4d9804135ca220c2",
+			"206a89eba13359af90ef79de86bdd99bff66c0f59a953267aef38262fe2d5450",
 		},
 		{
 			"dcd394f91f74c2ba16aad74a22bb0ed47fe857774b8f2d6c09e28bfb14642878",
-			"fb848ec64d0be572a63c38fe83df5e7f3d032f60bf8c969ef67d36bf4ada22a9",
+			"c3966ef6773e23624a31d2dca89ec80718ff397685e573af6b6a64522a46342c",
 		},
 	}
 
