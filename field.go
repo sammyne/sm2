@@ -1053,6 +1053,108 @@ func (f *fieldVal) SetInt(ui uint) *fieldVal {
 	return f
 }
 
+// Given that p is congruent to 3 mod 4, we can compute the square root of
+// a mod p as the (p+1)/4'th power of a.
+//
+// As (p+1)/4 is an even number, it will have the same result for a and for
+// (-a). Only one of these two numbers actually has a square root however,
+// so we test at the end by squaring and comparing to the input.
+// Also because (p+1)/4 is an even number, the computed square root is
+// itself always a square (a ** ((p+1)/4) is the square of a ** ((p+1)/8)).
+func (f *fieldVal) Sqrt() *fieldVal {
+	return f.SqrtVal(f)
+}
+
+// SqrtVal estimates the square root of x modulus sm2 prime.
+//
+// Given that p is congruent to 3 mod 4, we can compute the square root of
+// a mod p as the (p+1)/4'th power of a.
+//
+// As (p+1)/4 is an even number, it will have the same result for a and for
+// (-a). Only one of these two numbers actually has a square root however,
+// so we test at the end by squaring and comparing to the input.
+// Also because (p+1)/4 is an even number, the computed square root is
+// itself always a square (a ** ((p+1)/4) is the square of a ** ((p+1)/8)).
+//
+// @TODO: benchmark against the one in btcec
+func (f *fieldVal) SqrtVal(x *fieldVal) *fieldVal {
+	// The binary representation of (p+1)/4 has 3 blocks of 1s, with lengths in
+	//  { 1, 31, 128 }. Use an addition chain to calculate 2^n - 1 for each block:
+	//  [1], 2, 3, 4, 7, 8, 14, 16, 17, [31], 32, 64, [128]
+	//
+	// reference: https://github.com/bitcoin-core/secp256k1/blob/856a01d6ad60c70fd92bdd44fa8584493b87594d/src/field_impl.h#L39
+
+	// xi=f^(2^i-1)
+	var x2, x3, x4, x7, x8, x14, x16, x17, x31, x32, x64, x128 fieldVal
+
+	//fmt.Println("f:", f)
+
+	x2.SquareVal(x).Mul(x)
+	x3.SquareVal(&x2).Mul(x)
+	x4.SquareVal(&x3).Mul(x)
+	x7.SquareVal(&x4).Square().Square().Mul(&x3)
+	x8.SquareVal(&x7).Mul(x)
+
+	x14.SquareVal(&x7).Square().Square().Square()
+	x14.Square().Square().Square()
+	x14.Mul(&x7)
+
+	x16.SquareVal(&x8).Square().Square().Square()
+	x16.Square().Square().Square().Square()
+	x16.Mul(&x8)
+
+	x17.SquareVal(&x16).Mul(x)
+
+	x31 = x17
+	for i := 0; i < 14; i++ {
+		x31.Square()
+	}
+	x31.Mul(&x14)
+
+	x32.SquareVal(&x31).Mul(x)
+
+	x64 = x32
+	for i := 0; i < 32; i++ {
+		x64.Square()
+	}
+	x64.Mul(&x32)
+
+	x128 = x64
+	for i := 0; i < 64; i++ {
+		x128.Square()
+	}
+	x128.Mul(&x64)
+
+	// The final result is then assembled using a sliding window over the blocks.
+	// From the most significant to the least ones,
+	// 1st 1s block of 31 bits, with 223 bits to its right
+	// 2nd 1s block of 128 bits, with 94 bits to its right
+	// 3rd 1s block of 1 bit, with 62 bits to its right
+
+	// put in the 1st 1s block, i.e., 2^31-1
+	*f = x31
+	// left shift the exponent 223-94 bits
+	for i := 0; i < 129; i++ {
+		f.Square()
+	}
+
+	// put in the 2nd 1s block
+	f.Mul(&x128)
+	// left shift the exponent 94-62 bits
+	for i := 0; i < 32; i++ {
+		f.Square()
+	}
+
+	// put in the 3rd 1s block
+	f.Mul(x)
+	// left shift the exponent 62-0 bits
+	for i := 0; i < 62; i++ {
+		f.Square()
+	}
+
+	return f
+}
+
 // Square squares the field value.  The existing field value is modified.  Note
 // that this function can overflow if multiplying any of the individual words
 // exceeds a max uint32.  In practice, this means the magnitude of the field
